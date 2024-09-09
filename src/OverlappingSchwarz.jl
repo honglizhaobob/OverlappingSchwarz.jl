@@ -15,6 +15,8 @@ module OverlappingSchwarz
     using Base;
     # interpolating paths 
     using Interpolations;
+    # parallel processes
+    using Distributed;
 
     # exports
     export Random;
