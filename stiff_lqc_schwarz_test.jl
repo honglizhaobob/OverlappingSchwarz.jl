@@ -1,16 +1,19 @@
-# (05/06-05/09) Test 1: 
-# linear quadratic control that is stiff
-# ----------------------------------------------------------------------
-includet("OverlappingSchwarz.jl");
-using .OSP
+# Development mode 
+using Revise
+using LaTeXStrings
+# Package in development
+using OverlappingSchwarz
 
-# import standard libraries
-using LinearAlgebra;
-using Plots, LaTeXStrings
-using Random; Random.seed!(1);
-using Interpolations
-# define problem parameters
+# other packages for this file 
+using Random;
+using Plots; gr();
 
+# fix seed for reproducibility
+Random.seed!(1);
+
+##################################################
+# Define problem parameters
+##################################################
 # time grid
 tstart, tend = 0, 10.0;
 ndims = 2;
@@ -34,54 +37,20 @@ L = [1. 0; 0 1.];
 mu = 1.0;
 S = mu * [1. 0; 0 1.];
 
-# simulate and visualize trajectory 
-# x0 = 0.5*ones(ndims);
-# x = zeros(ndims, nt);
-# x[:, 1] = x0;
-# # random control 
-# u = (sqrt(dt)/dt)*randn(ndims, nt);
-# for n = 2:nt 
-#     x[:, n] = x[:, n-1] + dt * (A * x[:, n-1] + B * u[:, n-1]);
-# end
-# plot(x[1, :], x[2, :], linewidth=2.0)
-
-# solve control with a fixed initial condition
-solve_global = true;
 # initial condition for the full problem
 x0 = [-1.0, -2.0];
-if solve_global
-    # create linear quadratic control
-    prob = OSP.LinearQuadraticProblem(
-        x0, t, xd, ud, A, B, D, L, S
-    );
-    x, lambda, u = OSP.solve(prob);
-    global p = plot(x[1, :], x[2, :], 
-        linestyle=:solid, linewidth=2.5, color=:blue, 
-        label="",
-        dpi=300
-    );
-    plot!(p,title="Global",xlabel=L"$x_1$",ylabel=L"$x_2$");
-    scatter([x[1,1]],[x[2,1]],label=L"$t = 0$",markersize=3.0,color=:black); 
-    scatter([x[1,end]],[x[2,end]],label=L"$t = T)$",markersize=3.0,color=:black); 
-    savefig(p, "./fig/global2.png");
-end
 
-
-
-#error()
-############################################################
 # initialize Schwarz problem
 knots = [3.0, 7.0];
 # extensions 
 tau_left = [0.0, 0.3, 0.3];
 tau_right = [0.3, 0.3, 0.0];
-prob = OSP.SchwarzProblem(
+prob = OverlappingSchwarz.SchwarzProblem(
     ndims, tstart, tend, knots, tau_left, tau_right
 );
 println("* Overlapped intervals: $(prob.doms)");
-println("* Maximum overlap size = $(OSP.max_overlap(prob))");
+println("* Maximum overlap size = $(OverlappingSchwarz.max_overlap(prob))");
 
-#error()
 # initialize all subproblems
 
 # varying time step sizes 
@@ -110,13 +79,13 @@ for n = 1:prob.num_probs
         sub_xd[:, end] = xd[:, end];
     end
     sub_ud = zeros(ndims, sub_nt);
-    prob.subproblems[n] = OSP.LinearQuadraticProblem(
+    prob.subproblems[n] = OverlappingSchwarz.LinearQuadraticProblem(
         sub_x0, sub_t, sub_xd, sub_ud, A, B, D, L, S
     );
 end
 #error()
 # begin Schwarz iterations 
-max_schwarz_iterations = 5;#50;
+max_schwarz_iterations = 5;
 # solutions to subproblems with overlaps 
 x_overlapped = Vector{Any}(undef, prob.num_probs);
 lambda_overlapped = Vector{Any}(undef, prob.num_probs);
@@ -128,7 +97,7 @@ for n = 1:max_schwarz_iterations
     println("**************************************************")
     # solve (in parallel) each subproblem to optimality
     for k = 1:prob.num_probs
-        global sub_x, sub_lambda, sub_u = OSP.solve(
+        global sub_x, sub_lambda, sub_u = OverlappingSchwarz.solve(
             prob.subproblems[k], 1e-2
         );
         # store 
@@ -156,21 +125,21 @@ for n = 1:max_schwarz_iterations
             lambda_query = prev_lambda[:, idx];
         else
             # linear interpolation 
-            x_query = OSP.linear_interp(t_query, 
+            x_query = OverlappingSchwarz.linear_interp(t_query, 
                 prev_t[idx-1], prev_t[idx], 
                 prev_x[:, idx-1], prev_x[:, idx]
             );
-            u_query = OSP.linear_interp(t_query, 
+            u_query = OverlappingSchwarz.linear_interp(t_query, 
                 prev_t[idx-1], prev_t[idx], 
                 prev_u[:, idx-1], prev_u[:, idx]
             );
-            lambda_query = OSP.linear_interp(t_query, 
+            lambda_query = OverlappingSchwarz.linear_interp(t_query, 
                 prev_t[idx-1], prev_t[idx], 
                 prev_lambda[:, idx-1], prev_lambda[:, idx]
             );
         end
         # update initial condition of current interval 
-        OSP.update_initial!(prob.subproblems[k], collect(x_query));
+        OverlappingSchwarz.update_initial!(prob.subproblems[k], collect(x_query));
     end
     # update terminal conditions (last interval does not require update) 
     for k = 1:prob.num_probs-1
@@ -187,21 +156,21 @@ for n = 1:max_schwarz_iterations
         idx = findfirst(x -> x >= t_query, next_t);
         
         # linear interpolation including boundary
-        x_query = OSP.linear_interp(t_query, 
+        x_query = OverlappingSchwarz.linear_interp(t_query, 
                 next_t[idx-1], next_t[idx], 
                 next_x[:, idx-1], next_x[:, idx]
             );
-        u_query = OSP.linear_interp(t_query, 
+        u_query = OverlappingSchwarz.linear_interp(t_query, 
                 next_t[idx-1], next_t[idx], 
                 next_u[:, idx-1], next_u[:, idx]
             );
-        lambda_query = OSP.linear_interp(t_query, 
+        lambda_query = OverlappingSchwarz.linear_interp(t_query, 
                 next_t[idx-1], next_t[idx], 
                 next_lambda[:, idx-1], next_lambda[:, idx]
             );
         # update terminal data as derived 
         terminal_data = collect(x_query)-(prob.subproblems[k].S\collect(lambda_query));
-        OSP.update_terminal!(prob.subproblems[k], terminal_data);
+        OverlappingSchwarz.update_terminal!(prob.subproblems[k], terminal_data);
     end
 end
 
@@ -214,8 +183,6 @@ for k = eachindex(prob.subproblems)
     );
 end
 
-tmp = OSP.schwarz_size(prob);
+tmp = OverlappingSchwarz.schwarz_size(prob);
 tmp = maximum(tmp);
-plot!(p, title="Local", dpi=300);
-plot!(p, xlabel=L"$x_1$", ylabel=L"$x_2$");
-savefig(p, "./fig/local3.png");
+plot!(p, title=latexstring("Local, 3 problems, \$\\max N_t = {$(tmp)} \$"), dpi=300);
