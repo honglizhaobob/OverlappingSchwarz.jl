@@ -6,18 +6,22 @@
 module OverlappingSchwarz
 
     # dependency
-    using LinearAlgebra
+    using LinearAlgebra;
     # random
-    using Statistics, Random
+    using Statistics, Random;
     # plotting 
     using Plots; gr();
     # overriding the base library 
-    using Base
+    using Base;
+    # interpolating paths 
+    using Interpolations;
 
-    # exports 
-    export greet
-
-    # include other code files 
-    include("SchwarzProblem.jl");
+    # exports
+    export Random;
+    export LinearQuadraticProblem, NonlinearProblem;
+    # main functionality
+    include("schwarz.jl");
+    include("ocp.jl");
+    # utility functions
     include("path_utils.jl");
 end

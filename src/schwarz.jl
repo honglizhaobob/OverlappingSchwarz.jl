@@ -123,8 +123,3 @@ function schwarz_size(prob :: SchwarzProblem)
     end
     return res;
 end
-
-
-function greet()
-    println("Hello world");
-end
